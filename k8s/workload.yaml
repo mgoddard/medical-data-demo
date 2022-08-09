@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: medical-data-gen
+spec:
+  selector:
+    matchLabels:
+      app: medical-data-gen
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: medical-data-gen
+    spec:
+      containers:
+      - name: medical-data-gen
+        image: mgoddard/medical-data-gen:1.1
+        imagePullPolicy: Always
+        env:
+          - name: DB_URL
+            value: "postgres://demouser:demopasswd@cockroachdb-public:26257/defaultdb"
+          - name: T_SLEEP_MS # Sleep this many milliseconds between INSERTs
+            value: "100"
+          - name: CSV_URL # The data source for the demo
+            value: "https://archive.ics.uci.edu/ml/machine-learning-databases/00519/heart_failure_clinical_records_dataset.csv"
+          - name: PERTURB_FRACTION # Adjust the continuous values in CSV data +/- this fraction
+            value: "0.15"
+      restartPolicy: Always
+
