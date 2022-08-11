@@ -107,6 +107,10 @@ kubectl get pods
 echo "Ensure the 'redpanda-kafka-0' pod show a 'Running' state before running the next step."
 run_cmd ./kafka_create_topic.sh
 
+echo "Apply the CockroachDB Enterprise license"
+echo "Press ENTER when that's done"
+read
+
 echo "Start the changefeed (CDC) on the CockroachDB cluster:"
 cat ./create_changefeed.sql | kubectl exec -i cockroachdb-client-secure -- ./cockroach sql --certs-dir=/cockroach/cockroach-certs --host=cockroachdb-public
 
