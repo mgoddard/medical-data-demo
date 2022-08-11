@@ -52,10 +52,8 @@ def do_setup(conn):
   with conn.cursor() as cur:
     cur.execute("CREATE TYPE IF NOT EXISTS mf AS ENUM ('M', 'F');")
     logging.info("%s", cur.statusmessage)
-    cur.execute("DROP TABLE IF EXISTS clinical;")
-    logging.info("%s", cur.statusmessage)
     sql = """
-    CREATE TABLE clinical
+    CREATE TABLE IF NOT EXISTS clinical
     (
       patient_id UUID NOT NULL DEFAULT gen_random_uuid()
       , ts TIMESTAMP NOT NULL DEFAULT now()
