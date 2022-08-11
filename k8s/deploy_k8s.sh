@@ -2,9 +2,9 @@
 
 # https://www.cockroachlabs.com/docs/stable/deploy-cockroachdb-with-kubernetes.html
 
+REGION="us-east4"
 MACHINETYPE="e2-standard-4" # 4	vCPU, 16 GB RAM, $0.134012/hour
 N_NODES=2 # This will create N_NODES *per AZ* within REGION
-REGION="us-east4"
 
 NAME="${USER}-medical-demo"
 
@@ -42,7 +42,7 @@ echo "Check that the pods were created"
 run_cmd kubectl get pods
 
 echo "WAIT until the output of 'kubectl get pods' shows the three cockroachdb-N nodes in 'Running' state"
-echo "(This could take upwards of 5 minutes)"
+echo "(This could take 5 minutes)"
 run_cmd kubectl get pods
 
 echo "Check to see whether the LB for DB Console and SQL is ready yet"
@@ -50,7 +50,6 @@ echo "Look for the external IP of the app in the 'LoadBalancer Ingress:' line of
 run_cmd kubectl describe service crdb-lb
 echo "If not, run 'kubectl describe service crdb-lb' in a separate window"
 
-# Deploy a SQL client
 SQL_CLIENT_YAML="https://raw.githubusercontent.com/cockroachdb/cockroach-operator/master/examples/client-secure-operator.yaml"
 echo "Adding a secure SQL client pod ..."
 kubectl create -f $SQL_CLIENT_YAML
@@ -67,8 +66,8 @@ echo "Press ENTER to run this SQL"
 read
 cat ./create_user.sql | kubectl exec -i cockroachdb-client-secure -- ./cockroach sql --certs-dir=/cockroach/cockroach-certs --host=cockroachdb-public
 
-# Start the workload (doing the INSERTs of the medical data)
-echo "Create DB tables and load data (takes about 3 minutes)"
+
+echo "Start the workload (doing the INSERTs of the medical data)"
 run_cmd kubectl apply -f ./workload.yaml
 run_cmd kubectl get pods
 
@@ -76,6 +75,44 @@ run_cmd kubectl get pods
 echo "Open a browser tab to port 8080 at the IP provided for the DB Console endpoint"
 echo
 echo "** Use 'demouser' as login and 'demopasswd' as password **"
+
+# Install Redpanda Kafka (https://docs.redpanda.com/docs/quickstart/kubernetes-qs-cloud/)
+echo "Installing cert-manager"
+helm repo add jetstack https://charts.jetstack.io && helm repo update && helm install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --version v1.4.4 --set installCRDs=true
+
+sleep 5
+echo "Verify there are 3 'cert-manager-...' pods running"
+kubectl get pods --namespace cert-manager
+echo "If not, re-run 'kubectl get pods --namespace cert-manager' again and don't proceed until they are running"
+
+echo "Add Redpanda chart repository"
+helm repo add redpanda https://charts.vectorized.io/ && helm repo update
+
+export VERSION=$(curl -s https://api.github.com/repos/redpanda-data/redpanda/releases/latest | jq -r .tag_name)
+
+echo "Apply the Redpanda CRD"
+kubectl apply -k https://github.com/redpanda-data/redpanda/src/go/k8s/config/crd?ref=$VERSION
+
+echo "Install the Redpanda operator"
+helm install redpanda-operator redpanda/redpanda-operator --namespace redpanda-system --create-namespace --version $VERSION
+
+kubectl -n redpanda-system rollout status -w deployment/redpanda-operator
+echo "If the output says 'deployment \"redpanda-operator\" successfully rolled out', you can run the next step."
+
+echo "Deploy the Redpanda instance"
+run_cmd kubectl apply -f ./redpanda.yaml
+sleep 10
+kubectl get pods
+
+echo "Ensure the 'redpanda-kafka-0' pod show a 'Running' state before running the next step."
+run_cmd ./kafka_create_topic.sh
+
+echo "Start the changefeed (CDC) on the CockroachDB cluster:"
+cat ./create_changefeed.sql | kubectl exec -i cockroachdb-client-secure -- ./cockroach sql --certs-dir=/cockroach/cockroach-certs --host=cockroachdb-public
+
+sleep 10
+echo "Consume one row from the Kafka topic:"
+run_cmd ./kafka_consume_topic.sh
 
 # Kill a node
 echo "Kill a CockroachDB pod"
@@ -98,8 +135,11 @@ echo "** Finally: tear it all down.  CAREFUL -- BE SURE YOU'RE DONE! **"
 echo "Press ENTER to confirm you want to TEAR IT DOWN."
 read
 
-echo "Deleting the data loader app"
-kubectl delete -f ./data-loader.yaml
+echo "Deleting the workload app"
+kubectl delete -f ./workload.yaml
+
+echo "Deleting Kafka"
+kubectl delete -f ./redpanda.yaml
 
 echo "Deleting the SQL client"
 kubectl delete -f $SQL_CLIENT_YAML
