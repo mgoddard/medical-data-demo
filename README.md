@@ -3,12 +3,17 @@
 ## Overview
 
 * Patient sees a medical provider
-* Medical provider collects information/data from the patient
-* Patient data is loaded to CockroachDB
-* Data gets published to a Kafka topic
-* Cloudera consumes from the Kafka topic and
+* Medical provider enters patient biometric data into clinical app
+* CockroachDB is the OLTP database for the clinical app
+* A CockroachDB changefeed (CDC) is configured to publish to a Kafka topic
+* Cloudera consumes from the Kafka topic and then
   - predicts if the patient is at high risk for heart failure
-  - and creates a visualization of the data
+  - creates a visualization of the data
+
+## Deploying and running the demo
+
+* The [./k8s/deploy_k8s.sh](./k8s/deploy_k8s.sh) script can be used to roll this out, or as a guide.
+* Note that CockroachDB changefeeds require an enterprise license.
 
 ## Data
 
@@ -72,5 +77,6 @@ pod "rpk" deleted
 
 * [Data source](https://archive.ics.uci.edu/ml/datasets/Heart+failure+clinical+records)
 * [Deploy CockroachDB on K8s](https://www.cockroachlabs.com/docs/stable/deploy-cockroachdb-with-kubernetes.html)
+* [CockroachDB changefeeds](https://www.cockroachlabs.com/docs/v22.1/create-changefeed)
 * [Redpanda Kafka](https://docs.redpanda.com/docs/quickstart/kubernetes-qs-cloud/)
 
