@@ -130,17 +130,17 @@ def run_transaction(conn, op, max_retries=3):
         # This is a retry error, so we roll back the current
         # transaction and sleep for a bit before retrying. The
         # sleep time increases for each failed transaction.
-        logging.debug("Error: %s", e)
+        logging.info("Error: %s", e)
         conn.rollback()
-        logging.debug("EXECUTE SERIALIZATION_FAILURE BRANCH")
+        logging.info("EXECUTE SERIALIZATION_FAILURE BRANCH")
         sleep_ms = (2**retry) * 0.1 * (random.random() + 0.5)
-        logging.debug("Sleeping %s ms", sleep_ms)
+        logging.info("Sleeping %s ms", sleep_ms)
         time.sleep(sleep_ms)
       except psycopg2.Error as e:
-        logging.debug("Error: %s", e)
-        logging.debug("EXECUTE NON-SERIALIZATION_FAILURE BRANCH")
+        logging.info("Error: %s", e)
+        logging.info("EXECUTE DEFAULT BRANCH")
         raise e
-    raise ValueError(f"transaction did not succeed after {max_retries} retries")
+  raise ValueError(f"transaction did not succeed after {max_retries} retries")
 
 insert_sql = """
 INSERT INTO clinical
@@ -156,20 +156,35 @@ def do_insert(conn, sql, row):
   conn.commit()
   logging.debug("do_insert(): %s", cur.statusmessage)
 
-# main()
-conn = None
-try:
-  conn = psycopg2.connect(db_url, application_name="clinical data")
-except Exception as e:
-  logging.fatal("database connection failed")
-  logging.fatal(e)
+def get_db_conn():
+  rv = None
+  try:
+    rv = psycopg2.connect(db_url, application_name="clinical data")
+  except Exception as e:
+    logging.fatal("database connection failed")
+    logging.fatal(e)
+  return rv
 
+# main()
+conn = get_db_conn()
 do_setup(conn)
 csv_data = get_csv()
 
 n_rows = 0
+t_sleep_reconnect = 0.5
 while (True):
-  run_transaction(conn, lambda conn: do_insert(conn, insert_sql, gen_row()))
+  vals = gen_row()
+  try:
+    run_transaction(conn, lambda conn: do_insert(conn, insert_sql, vals))
+  # For a lost connection, make a single attempt to reconnect/rerun
+  except psycopg2.Error as e:
+    logging.info("Error: %s", e)
+    logging.info(f"Sleeping {t_sleep_reconnect } seconds ...")
+    time.sleep(t_sleep_reconnect)
+    logging.info("Reconnecting ...")
+    conn = get_db_conn()
+    logging.info("Retrying TXN ...")
+    run_transaction(conn, lambda conn: do_insert(conn, insert_sql, vals))
   n_rows += 1
   if n_rows % 25 == 0:
     logging.info("Rows inserted: %s", n_rows)
