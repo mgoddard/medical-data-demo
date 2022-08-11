@@ -14,10 +14,16 @@
 
 * The [./k8s/deploy_k8s.sh](./k8s/deploy_k8s.sh) script can be used to roll this out, or as a guide.
 * Note that CockroachDB changefeeds require an enterprise license.
+* The [./k8s/db_cli.sh](./k8s/db_cli.sh) script will run a `cockroach sql` client and connect to the DB
+(requires the [`cockroach` binary](https://www.cockroachlabs.com/docs/releases/index.html) installed locally).
+Alternatively, if you have `psql` installed, you could use [./k8s/psql_cli.sh](./k8s/psql_cli.sh).
 
 ## Data
 
 * Initial state: CSV
+
+[Here's a copy of the CSV](./heart_failure_clinical_records_dataset.csv)
+
 ```
 age,anaemia,creatinine_phosphokinase,diabetes,ejection_fraction,high_blood_pressure,platelets,serum_creatinine,serum_sodium,sex,smoking,time,DEATH_EVENT
 75,0,582,0,20,1,265000,1.9,130,1,0,4,1
