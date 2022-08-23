@@ -10,7 +10,7 @@ then
 
   EXAMPLE:
 
-  $ export CRDB_LICENSE="SET CLUSTER SETTING cluster.organization = 'VAPO Demo';
+  $ export CRDB_LICENSE="SET CLUSTER SETTING cluster.organization = 'My Demo';
   SET CLUSTER SETTING enterprise.license = 'crl-0-AVcqn9lAMAIuqBPBUE8gRGSowa';"
 
   NOTE:
