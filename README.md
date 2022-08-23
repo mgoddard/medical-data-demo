@@ -12,7 +12,7 @@
 
 ## Deploying and running the demo
 
-* The [./k8s/deploy_k8s.sh](./k8s/deploy_k8s.sh) script can be used to roll this out, or as a guide.
+* The [./k8s/deploy_demo.sh](./k8s/deploy_demo.sh) script can be used to roll this out, or as a guide.
 * Note that CockroachDB changefeeds require an enterprise license.
 * The [./k8s/db_cli.sh](./k8s/db_cli.sh) script will run a `cockroach sql` client and connect to the DB
 (requires the [`cockroach` binary](https://www.cockroachlabs.com/docs/releases/index.html) installed locally).
@@ -55,22 +55,13 @@ time                           | 98
 ## Consume messages from the Kafka topic
 
 * Use your preferred client
-* For the current configuration, the broker endpoint is `redpanda-kafka.cockroach-operator-system.svc.cluster.local:9092`
+* For the current configuration, the broker endpoint is `cockroach-cluster-kafka-brokers.kafka.svc.cluster.local:9092`
 * Example:
 ```
-$ ./k8s/kafka_consume_topic.sh 
-+ /usr/local/bin/supervisord -d
-+ '[' '' = true ']'
-+ exec /usr/bin/rpk topic consume -n 1 clinical --brokers redpanda-kafka.cockroach-operator-system.svc.cluster.local:9092
-{
-  "topic": "clinical",
-  "key": "[\"00239a39-8878-4c41-be27-81df7b1d236e\", \"2022-08-11T11:47:11.426776\"]",
-  "value": "{\"age\": 75, \"anaemia\": false, \"diabetes\": false, \"ejection_fraction\": 21, \"high_blood_pressure\": true, \"patient_id\": \"00239a39-8878-4c41-be27-81df7b1d236e\", \"platelets\": 240921.32550000004, \"serum_creatinine\": 1.5555, \"serum_creatinine_phosphokinase\": 632.7, \"serum_sodium\": 131.9, \"sex\": \"F\", \"smoking\": true, \"time\": 29, \"ts\": \"2022-08-11T11:47:11.426776\"}",
-  "timestamp": 1660218638186,
-  "partition": 0,
-  "offset": 0
-}
-pod "rpk" deleted
+oc run kafka-consumer -ti --image=registry.redhat.io/amq7/amq-streams-kafka-31-rhel8:2.1.0 \
+  --rm=true --restart=Never -- bin/kafka-console-consumer.sh \
+  --bootstrap-server cockroach-cluster-kafka-brokers.kafka.svc.cluster.local:9092 \
+  --topic clinical --max-messages 10
 ```
 
 ## Rebuild and publish Docker image of the workload script
@@ -84,5 +75,4 @@ pod "rpk" deleted
 * [Data source](https://archive.ics.uci.edu/ml/datasets/Heart+failure+clinical+records)
 * [Deploy CockroachDB on K8s](https://www.cockroachlabs.com/docs/stable/deploy-cockroachdb-with-kubernetes.html)
 * [CockroachDB changefeeds](https://www.cockroachlabs.com/docs/v22.1/create-changefeed)
-* [Redpanda Kafka](https://docs.redpanda.com/docs/quickstart/kubernetes-qs-cloud/)
 

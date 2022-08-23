@@ -2,23 +2,33 @@
 
 # https://www.cockroachlabs.com/docs/stable/deploy-cockroachdb-with-kubernetes.html
 
-REGION="us-east4"
-MACHINETYPE="e2-standard-4" # 4	vCPU, 16 GB RAM, $0.134012/hour
-N_NODES=2 # This will create N_NODES *per AZ* within REGION
+if [ -z "${CRDB_LICENSE}" ]
+then
+  cat <<EoM
 
-NAME="${USER}-medical-demo"
+  Prior to running $0, you need to set the CRDB_LICENSE variable
+
+  EXAMPLE:
+
+  $ export CRDB_LICENSE="SET CLUSTER SETTING cluster.organization = 'VAPO Demo';
+  SET CLUSTER SETTING enterprise.license = 'crl-0-AVcqn9lAMAIuqBPBUE8gRGSowa';"
+
+  NOTE:
+  
+  This is the CockroachDB demo license you obtained from Cockroach Labs
+
+EoM
+  exit 1
+fi
 
 dir=$( dirname $0 )
 . $dir/include.sh
 
-# Create the GKE K8s cluster
-echo "See https://www.cockroachlabs.com/docs/v21.1/orchestrate-cockroachdb-with-kubernetes.html#hosted-gke"
-run_cmd gcloud container clusters create $NAME --region=$REGION --machine-type=$MACHINETYPE --num-nodes=$N_NODES
-if [ "$y_n" = "y" ] || [ "$y_n" = "Y" ]
-then
-  ACCOUNT=$( gcloud info | perl -ne 'print "$1\n" if /^Account: \[([^@]+@[^\]]+)\]$/' )
-  kubectl create clusterrolebinding $USER-cluster-admin-binding --clusterrole=cluster-admin --user=$ACCOUNT
-fi
+# Get OpenShift CLI credentials from here:
+# https://oauth-openshift.apps.cluster-qux29.qux29.sandbox8125.opentlc.com/oauth/token/display
+
+# Log into OpenShift (credential values shown here aren't real)
+oc login --insecure-skip-tls-verify=true --token=sha256~amVuWiHi2niARipPSXx20ghQ2QKA1IC7gfqQQ3Kd0J9 --server=https://api.cluster-qux29.qdx57.sandbox8125.opentlc.com:6443
 
 # Create the CockroachDB cluster
 echo "See https://www.cockroachlabs.com/docs/stable/deploy-cockroachdb-with-kubernetes.html"
@@ -65,7 +75,7 @@ echo "Once all three DB pods show 'Running', use the SQL CLI to add a user for u
 echo "Press ENTER to run this SQL"
 read
 cat ./create_user.sql | kubectl exec -i cockroachdb-client-secure -- ./cockroach sql --certs-dir=/cockroach/cockroach-certs --host=cockroachdb-public
-
+echo "User 'demouser' with password 'demopasswd' has been added."
 
 echo "Start the workload (doing the INSERTs of the medical data)"
 run_cmd kubectl apply -f ./workload.yaml
@@ -76,47 +86,29 @@ echo "Open a browser tab to port 8080 at the IP provided for the DB Console endp
 echo
 echo "** Use 'demouser' as login and 'demopasswd' as password **"
 
-# Install Redpanda Kafka (https://docs.redpanda.com/docs/quickstart/kubernetes-qs-cloud/)
-echo "Installing cert-manager"
-helm repo add jetstack https://charts.jetstack.io && helm repo update && helm install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --version v1.4.4 --set installCRDs=true
-
-sleep 5
-echo "Verify there are 3 'cert-manager-...' pods running"
-kubectl get pods --namespace cert-manager
-echo "If not, re-run 'kubectl get pods --namespace cert-manager' again and don't proceed until they are running"
-
-echo "Add Redpanda chart repository"
-helm repo add redpanda https://charts.vectorized.io/ && helm repo update
-
-export VERSION=$(curl -s https://api.github.com/repos/redpanda-data/redpanda/releases/latest | jq -r .tag_name)
-
-echo "Apply the Redpanda CRD"
-kubectl apply -k https://github.com/redpanda-data/redpanda/src/go/k8s/config/crd?ref=$VERSION
-
-echo "Install the Redpanda operator"
-helm install redpanda-operator redpanda/redpanda-operator --namespace redpanda-system --create-namespace --version $VERSION
-
-kubectl -n redpanda-system rollout status -w deployment/redpanda-operator
-echo "If the output says 'deployment \"redpanda-operator\" successfully rolled out', you can run the next step."
-
-echo "Deploy the Redpanda instance"
-run_cmd kubectl apply -f ./redpanda.yaml
-sleep 10
-kubectl get pods
-
-echo "Ensure the 'redpanda-kafka-0' pod show a 'Running' state before running the next step."
-run_cmd ./kafka_create_topic.sh
-
 echo "Apply the CockroachDB Enterprise license"
 echo "Press ENTER when that's done"
 read
+echo "$CRDB_LICENSE" | kubectl exec -i cockroachdb-client-secure -- ./cockroach sql --certs-dir=/cockroach/cockroach-certs --host=cockroachdb-public
+
+echo "Ensure the AMQStreams Kafka instance is configured and running on OpenShift"
+echo "The name of that needs to be 'cockroach-cluster' (this is baked into the demo)"
+echo "Press ENTER to proceed"
+read
+
+echo "Create the Kafka topic 'clinical' to match the name of the table in the DB:"
+run_cmd kubectl apply -f ./kafka-create-topic.yaml
 
 echo "Start the changefeed (CDC) on the CockroachDB cluster:"
 cat ./create_changefeed.sql | kubectl exec -i cockroachdb-client-secure -- ./cockroach sql --certs-dir=/cockroach/cockroach-certs --host=cockroachdb-public
 
 sleep 10
-echo "Consume one row from the Kafka topic:"
-run_cmd ./kafka_consume_topic.sh
+echo "Press ENTER to consume 10 rows from the Kafka topic:"
+read
+oc run kafka-consumer -ti --image=registry.redhat.io/amq7/amq-streams-kafka-31-rhel8:2.1.0 \
+  --rm=true --restart=Never -- bin/kafka-console-consumer.sh \
+  --bootstrap-server cockroach-cluster-kafka-brokers.kafka.svc.cluster.local:9092 \
+  --topic clinical --max-messages 10
 
 # Kill a node
 echo "Kill a CockroachDB pod"
@@ -142,9 +134,6 @@ read
 echo "Deleting the workload app"
 kubectl delete -f ./workload.yaml
 
-echo "Deleting Kafka"
-kubectl delete -f ./redpanda.yaml
-
 echo "Deleting the SQL client"
 kubectl delete -f $SQL_CLIENT_YAML
 
@@ -156,7 +145,4 @@ kubectl delete pv,pvc --all
 
 echo "Deleting the K8s operator"
 kubectl delete -f $OPERATOR_YAML
-
-echo "Deleting the GKE cluster"
-run_cmd gcloud container clusters delete $NAME --region=$REGION --quiet
 
