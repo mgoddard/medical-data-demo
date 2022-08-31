@@ -1,0 +1,45 @@
+diff --git a/k8s/create_changefeed.sql b/k8s/create_changefeed.sql
+index beff572..b637703 100644
+--- a/k8s/create_changefeed.sql
++++ b/k8s/create_changefeed.sql
+@@ -1,2 +1,2 @@
+ SET CLUSTER SETTING kv.rangefeed.enabled = true;
+-CREATE CHANGEFEED FOR TABLE clinical INTO 'kafka://cockroach-cluster-kafka-brokers.kafka.svc.cluster.local:9092' WITH envelope = 'row';
++CREATE CHANGEFEED FOR TABLE clinical INTO 'kafka://cockroachcluster-kafka-brokers.openshift-operators.svc.cluster.local:9092' WITH envelope = 'row';
+diff --git a/k8s/deploy_demo.sh b/k8s/deploy_demo.sh
+index 88789d0..875b141 100755
+--- a/k8s/deploy_demo.sh
++++ b/k8s/deploy_demo.sh
+@@ -92,7 +92,7 @@ read
+ echo "$CRDB_LICENSE" | kubectl exec -i cockroachdb-client-secure -- ./cockroach sql --certs-dir=/cockroach/cockroach-certs --host=cockroachdb-public
+ 
+ echo "Ensure the AMQStreams Kafka instance is configured and running on OpenShift"
+-echo "The name of that needs to be 'cockroach-cluster' (this is baked into the demo)"
++echo "The name of that needs to be 'cockroachcluster' (this is baked into the demo)"
+ echo "Press ENTER to proceed"
+ read
+ 
+@@ -107,7 +107,7 @@ echo "Press ENTER to consume 10 rows from the Kafka topic:"
+ read
+ oc run kafka-consumer -ti --image=registry.redhat.io/amq7/amq-streams-kafka-31-rhel8:2.1.0 \
+   --rm=true --restart=Never -- bin/kafka-console-consumer.sh \
+-  --bootstrap-server cockroach-cluster-kafka-brokers.kafka.svc.cluster.local:9092 \
++  --bootstrap-server cockroachcluster-kafka-brokers.openshift-operators.svc.cluster.local:9092 \
+   --topic clinical --max-messages 10
+ 
+ # Kill a node
+diff --git a/k8s/kafka-create-topic.yaml b/k8s/kafka-create-topic.yaml
+index 8115c3f..faca5e6 100644
+--- a/k8s/kafka-create-topic.yaml
++++ b/k8s/kafka-create-topic.yaml
+@@ -3,8 +3,8 @@ apiVersion: kafka.strimzi.io/v1beta2
+ metadata:
+   name: clinical
+   labels:
+-    strimzi.io/cluster: cockroach-cluster
+-  namespace: kafka
++    strimzi.io/cluster: cockroachcluster
++  namespace: openshift-operators
+ spec:
+   partitions: 10
+   replicas: 3

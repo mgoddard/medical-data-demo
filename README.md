@@ -17,6 +17,8 @@
 * The [./k8s/db_cli.sh](./k8s/db_cli.sh) script will run a `cockroach sql` client and connect to the DB
 (requires the [`cockroach` binary](https://www.cockroachlabs.com/docs/releases/index.html) installed locally).
 Alternatively, if you have `psql` installed, you could use [./k8s/psql_cli.sh](./k8s/psql_cli.sh).
+* [./effects_of_changing_names.diff](./effects_of_changing_names.diff) shows the effects of changing
+the namespace that the AMQ Streams Kafka instance is deployed into (here, it's name was changed as well).
 
 ## Data
 

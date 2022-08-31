@@ -92,7 +92,7 @@ read
 echo "$CRDB_LICENSE" | kubectl exec -i cockroachdb-client-secure -- ./cockroach sql --certs-dir=/cockroach/cockroach-certs --host=cockroachdb-public
 
 echo "Ensure the AMQStreams Kafka instance is configured and running on OpenShift"
-echo "The name of that needs to be 'cockroach-cluster' (this is baked into the demo)"
+echo "The name of that needs to be 'cockroachcluster' (this is baked into the demo)"
 echo "Press ENTER to proceed"
 read
 
@@ -107,7 +107,7 @@ echo "Press ENTER to consume 10 rows from the Kafka topic:"
 read
 oc run kafka-consumer -ti --image=registry.redhat.io/amq7/amq-streams-kafka-31-rhel8:2.1.0 \
   --rm=true --restart=Never -- bin/kafka-console-consumer.sh \
-  --bootstrap-server cockroach-cluster-kafka-brokers.kafka.svc.cluster.local:9092 \
+  --bootstrap-server cockroachcluster-kafka-brokers.openshift-operators.svc.cluster.local:9092 \
   --topic clinical --max-messages 10
 
 # Kill a node

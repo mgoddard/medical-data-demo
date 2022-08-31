@@ -3,8 +3,8 @@ apiVersion: kafka.strimzi.io/v1beta2
 metadata:
   name: clinical
   labels:
-    strimzi.io/cluster: cockroach-cluster
-  namespace: kafka
+    strimzi.io/cluster: cockroachcluster
+  namespace: openshift-operators
 spec:
   partitions: 10
   replicas: 3
